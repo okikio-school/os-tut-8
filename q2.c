@@ -130,11 +130,11 @@ int main() {
     }
 
 
-    // Forking to create a child process
-    pid = fork();
-
     // Print mem_index
     printf("mem_index: %d\n", mem_index);
+
+    // Forking to create a child process
+    pid = fork();
 
     // Secondary queue
     while ((current_process = pop(&secondary_queue)) != NULL) {
@@ -157,21 +157,23 @@ int main() {
             current_process->pid = pid;
             printf("Name: %s, Priority: %d, PID: %d, Address: %d, Runtime: %d\n", current_process->name, current_process->priority, current_process->pid, current_process->memory, current_process->runtime);
 
-            if (!current_process->suspended) {
-                if ((mem_index - current_process->memory) > MAX_PROCESSES) {
-                    printf("Insufficient memory for process %s\n", current_process->name);
-                    push(&secondary_queue, current_process);
-                    continue;
-                }
+            // if (!current_process->suspended) {
+            //     if ((mem_index - current_process->memory) > MAX_PROCESSES) {
+            //         printf("Insufficient memory for process %s\n", current_process->name);
+            //         push(&secondary_queue, current_process);
+            //         continue;
+            //     }
 
-                // Allocate the memory
-                for (int i = mem_index; i < mem_index + current_process->memory; i++) {
-                    avail_mem[i] = 1;
-                }
+            //     // Allocate the memory
+            //     for (int i = mem_index; i < mem_index + current_process->memory; i++) {
+            //         avail_mem[i] = 1;
+            //     }
                 
-                current_process->address = mem_index;
-                mem_index += current_process->memory;
-            } else {
+            //     current_process->address = mem_index;
+            //     mem_index += current_process->memory;
+            // } 
+            
+            if (current_process->suspended) {
                 kill(pid, SIGCONT);
                 current_process->suspended = false;
             }
