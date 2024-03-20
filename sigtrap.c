@@ -36,7 +36,6 @@
 #include <sys/times.h>
 #include <limits.h>
 #include <sys/resource.h>
-#include <bits/sigaction.h>
 
 #ifndef TRUE
 #define TRUE 1
