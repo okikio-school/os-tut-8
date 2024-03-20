@@ -17,10 +17,6 @@
 queue_t *priority_queue = NULL, *secondary_queue = NULL;
 int avail_mem[MEMORY] = {0};
 
-bool is_empty(queue_t *queue) {
-    return queue == NULL;
-}
-
 // Placeholder for exec_process function
 int main() {  
     // Attempt to open the file containing process information.
