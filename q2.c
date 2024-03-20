@@ -68,10 +68,9 @@ int main() {
 
     // Priority queue
     while (current_process != NULL) {
+        // Allocate the memory
         int status;
-
         for (int i = mem_index; i < mem_index + current_process->memory; i++) {
-            // Allocate the memory
             avail_mem[i] = 1;
         }
 
@@ -84,9 +83,8 @@ int main() {
             fprintf(stderr, "Fork failed\n");
             return 1;
         } else if (pid == 0) {
-            current_process->pid = getpid();
-
             // Child process
+            current_process->pid = getpid();
             printf("Name: %s, Priority: %d, PID: %d, Address: %d, Runtime: %d\n", current_process->name, current_process->priority, current_process->pid, current_process->memory, current_process->runtime);
 
             // Replace child's image with `./proceess`
@@ -144,9 +142,8 @@ int main() {
             fprintf(stderr, "Fork failed\n");
             return 1;
         } else if (pid == 0) {
-            current_process->pid = getpid();
-
             // Child process
+            current_process->pid = getpid();
             printf("Name: %s, Priority: %d, PID: %d, Address: %d, Runtime: %d\n", current_process->name, current_process->priority, current_process->pid, current_process->memory, current_process->runtime);
 
             // Replace child's image with `./proceess`
@@ -158,7 +155,10 @@ int main() {
             exit(1);
         } else {
             // Parent process
-            if (current_process->suspended == true && current_process->pid > 0) {
+            if (
+                current_process->suspended == true && 
+                current_process->pid > 0
+            ) {
                 kill(pid, SIGCONT);
                 current_process->suspended = false;
             }
