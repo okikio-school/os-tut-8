@@ -13,7 +13,6 @@
 #include "process.h"
 
 int main() {
-    process_t data; // Temporary variable to hold the data read from the file.
     // Attempt to open the file containing process information.
     FILE *file = fopen("processes_tree.txt", "r");
     if (file == NULL) {
@@ -23,6 +22,7 @@ int main() {
 
     // Root node of the binary tree.
     tree_t* root = NULL;
+    process_t data; // Temporary variable to hold the data read from the file.
 
     // Read each line from the file and insert the process data into a queue.
     while (fscanf(file, "%[^,], %[^,], %d, %d\n", data.parent, data.name, &data.priority, &data.memory) == 4) {

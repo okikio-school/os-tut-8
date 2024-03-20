@@ -2,85 +2,199 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <sys/types.h>
 #include <sys/wait.h>
-#include <signal.h>
+#include <sys/types.h>
+#include <signal.h> // Include for kill
+#include <stdbool.h>
 
-#define MAX_NAME_LENGTH 256
+#include "queue.h"
+#include "process.h"
+
+#define MAX_PROCESSES 100
+#define MAX_NAME_LEN 256
 #define MEMORY 1024
 
-typedef enum { false, true } bool;
+queue_t *priority_queue = NULL, *secondary_queue = NULL;
+int avail_mem[MEMORY] = {0};
 
-typedef struct proc {
-    char name[MAX_NAME_LENGTH];
-    int priority;
-    pid_t pid;
-    int address;
-    int memory;
-    int runtime;
-    bool suspended;
-    struct proc* next;
-} proc;
-
-typedef struct {
-    proc* front;
-    proc* rear;
-} Queue;
-
-int avail_mem[MEMORY] = {0}; // Memory array initialized to 0 indicating all memory is free.
-
-Queue priorityQueue = {NULL, NULL}; // Queue for real-time priority processes.
-Queue secondaryQueue = {NULL, NULL}; // Queue for secondary priority processes.
-
-void initQueue(Queue* queue) {
-    queue->front = queue->rear = NULL;
+bool is_empty(queue_t *queue) {
+    return queue == NULL;
 }
 
-void push(Queue* queue, proc* newProc) {
-    if (queue->rear == NULL) {
-        queue->front = queue->rear = newProc;
-        return;
+// Placeholder for exec_process function
+int main() {  
+    // Attempt to open the file containing process information.
+    FILE *file = fopen("processes_q2.txt", "r");
+    if (file == NULL) {
+        fprintf(stderr, "File not found\n");
+        exit(EXIT_FAILURE);
     }
-    queue->rear->next = newProc;
-    queue->rear = newProc;
-}
-
-proc* pop(Queue* queue) {
-    if (queue->front == NULL) return NULL;
-    proc* temp = queue->front;
-    queue->front = queue->front->next;
-    if (queue->front == NULL) queue->rear = NULL;
-    temp->next = NULL; // Disconnect the popped node from the queue
-    return temp;
-}
-
-// Function to execute a process using fork and exec, handling both queues
-void executeProcess(proc* process) {
-    // Implement fork(), exec(), waitpid(), and signal handling logic here
-    // Allocate memory before executing
-    // Update process' pid and address accordingly
-    // Handle suspension and resumption for secondary queue processes
-}
-
-// Function to find and allocate memory, returns starting index, or -1 if not enough memory
-int allocateMemory(int size) {
-    // Search avail_mem for a contiguous block of 'size' free slots
-    // Mark as used and return starting index
-    return -1; // Placeholder
-}
-
-// Function to free allocated memory
-void freeMemory(int address, int size) {
-    // Mark the memory block starting at 'address' of 'size' length as free
-}
-
-// Main function: load processes, manage queues, execute processes, and handle memory
-int main() {
-    // Read processes from the file and add them to the appropriate queues
     
-    // Execute all processes in the priority queue
+    // `input_process_list` is a temporary list that holds the processes read from the file.
+    process_t input_process_list[MAX_PROCESSES];
+    process_t data; // Temporary variable to hold the data read from the file.
+
+    // `len` is the length of the data stored in `input_process_list` array from the file.
+    int len = 0;
+
+    // Read each line from the file and insert the process data into a queue.
+    while (fscanf(file, "%[^,], %d, %d, %d\n", data.name, &data.priority, &data.memory, &data.runtime) == 4) {
+        data.pid = 0;
+        data.address = 0; // Indicating not yet allocated
+        data.suspended = false;
+        input_process_list[len++] = data;
+    }
+
+    // Close the file after reading the contents.
+    fclose(file);
     
-    // Execute processes in the secondary queue, handling suspension, resumption, and memory allocation
+    // For efficient memory management, shrink the dispatch list to the number of processes actually read from the file.
+    process_t dispatch_list[len];
+    for (int i = 0; i < len; i++) {
+        dispatch_list[i] = input_process_list[i];
+    }
+    
+    // Sort the dispatch list by arrival time.
+    int dispatch_list_len = sizeof(dispatch_list) / sizeof(dispatch_list[0]);
+
+    // Push the processes into the appropriate queues based off of their priority.
+    for (int i = 0; i < dispatch_list_len; i ++) {
+        process_t *proc = &dispatch_list[i];
+        if (proc->priority == 0) {
+            push(&priority_queue, proc);
+        } else {
+            push(&secondary_queue, proc);
+        }
+    }
+    
+    int mem_index = 0;
+    process_t *current_process = pop(&priority_queue);
+
+    // Priority queue
+    while (current_process != NULL) {
+        int status;
+
+        for (int i = mem_index; i < mem_index + current_process->memory; i++) {
+            // Allocate the memory
+            avail_mem[i] = 1;
+        }
+
+        current_process->address = mem_index;
+        mem_index += current_process->memory;
+
+        // Forking to create a child process
+        pid_t pid = fork();
+        if (pid < 0) {
+            fprintf(stderr, "Fork failed\n");
+            return 1;
+        } else if (pid == 0) {
+            current_process->pid = getpid();
+
+            // Child process
+            printf("Name: %s, Priority: %d, PID: %d, Address: %d, Runtime: %d\n", current_process->name, current_process->priority, current_process->pid, current_process->memory, current_process->runtime);
+
+            // Replace child's image with `./proceess`
+            // Execute the pre-compiled program './process'
+            execl("./process", "./process", (char *)NULL);
+
+            // execl only returns on error
+            perror("execl");
+            exit(1);
+        } else {
+            // Parent process
+            // Sleep for 5 seconds before sending SIGTSTP
+            sleep(current_process->runtime);
+            kill(pid, SIGTSTP);
+
+            // Wait for the child to terminate
+            waitpid(pid, &status, 0);
+            if (WIFEXITED(status)) {
+                printf("Child exited with status %d\n", WEXITSTATUS(status));
+            }
+        }
+
+        for (int i = current_process->address; i < current_process->address + current_process->memory; i++) {
+            // Deallocate the memory
+            avail_mem[i] = 0;
+        }
+
+        // Reset the memory index
+        mem_index = current_process->address;
+        current_process = pop(&priority_queue);
+    }
+
+    // Secondary queue
+    current_process = pop(&secondary_queue);
+    while (current_process != NULL) {
+        int status;
+        if ((mem_index - current_process->memory) < MAX_PROCESSES) {
+            printf("Insufficient memory for process %s\n", current_process->name);
+            push(&secondary_queue, current_process);
+            current_process = pop(&secondary_queue);
+            continue;
+        }
+
+        for (int i = mem_index; i < mem_index + current_process->memory; i++) {
+            // Allocate the memory
+            avail_mem[i] = 1;
+        }
+        
+        current_process->address = mem_index;
+        mem_index += current_process->memory;
+
+        // Forking to create a child process
+        pid_t pid = fork();
+        if (pid < 0) {
+            fprintf(stderr, "Fork failed\n");
+            return 1;
+        } else if (pid == 0) {
+            current_process->pid = getpid();
+
+            // Child process
+            printf("Name: %s, Priority: %d, PID: %d, Address: %d, Runtime: %d\n", current_process->name, current_process->priority, current_process->pid, current_process->memory, current_process->runtime);
+
+            // Replace child's image with `./proceess`
+            // Execute the pre-compiled program './process'
+            execl("./process", "./process", (char *)NULL);
+
+            // execl only returns on error
+            perror("execl");
+            exit(1);
+        } else {
+            // Parent process
+            if (current_process->suspended == true && current_process->pid > 0) {
+                kill(pid, SIGCONT);
+                current_process->suspended = false;
+            }
+
+            // Sleep for 1 seconds before sending SIGTSTP
+            sleep(1);
+            kill(pid, SIGTSTP);
+
+            current_process->runtime--;
+            current_process->pid = pid;
+            current_process->suspended = true;
+
+            if (current_process->runtime > 1) {
+                push(&secondary_queue, current_process);
+            } else {
+                sleep(current_process->runtime);
+
+                // Wait for the child to terminate
+                waitpid(pid, &status, 0);
+                if (WIFEXITED(status)) {
+                    printf("Child exited with status %d\n", WEXITSTATUS(status));
+                }
+            }
+        }
+
+        for (int i = current_process->address; i < current_process->address + current_process->memory; i++) {
+            // Deallocate the memory
+            avail_mem[i] = 0;
+        }
+
+        current_process = pop(&secondary_queue);
+    }
 
     return 0;
 }
